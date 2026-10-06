@@ -1,0 +1,52 @@
+const mongoose = require('mongoose');
+
+const PostSchema = new mongoose.Schema({
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  content: {
+    type: String,
+    trim: true,
+    maxlength: [5000, 'Post content cannot exceed 5000 characters']
+  },
+  image: {
+    type: String,
+    default: ''
+  },
+  likes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  comments: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Comment'
+  }],
+  tags: [{
+    type: String,
+    trim: true
+  }]
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Virtual for like count
+PostSchema.virtual('likeCount').get(function () {
+  return this.likes ? this.likes.length : 0;
+});
+
+// Virtual for comment count
+PostSchema.virtual('commentCount').get(function () {
+  return this.comments ? this.comments.length : 0;
+});
+
+// Index for feed queries
+PostSchema.index({ createdAt: -1 });
+PostSchema.index({ author: 1, createdAt: -1 });
+PostSchema.index({ content: 'text' });
+
+module.exports = mongoose.model('Post', PostSchema);
