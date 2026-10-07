@@ -177,23 +177,26 @@ const initApp = async () => {
 initApp();
 
 // CORS Configuration
+const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.trim().replace(/\/$/, '') : null;
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
-  process.env.CLIENT_URL
+  clientUrl
 ].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+    if (!origin) return callback(null, true);
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(normalizedOrigin) || process.env.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -203,6 +206,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Static directory for uploaded assets
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Root / Health check endpoint (Handles GET and HEAD for Render health checks)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'Nexora API is running',
+    status: 'ok'
+  });
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
