@@ -182,23 +182,27 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
+  'https://nexora-lac-three.vercel.app',
   clientUrl
 ].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
+    const normalizedOrigin = origin.trim().replace(/\/$/, '');
     const isVercel = /\.vercel\.app$/.test(normalizedOrigin);
     if (allowedOrigins.includes(normalizedOrigin) || isVercel || process.env.NODE_ENV === 'development') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+    console.warn(`[CORS Blocked] Origin: ${origin}`);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+app.options('*', cors());
 
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
