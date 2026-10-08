@@ -188,8 +188,8 @@ const allowedOrigins = [
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    const normalizedOrigin = origin.replace(/\/$/, '');
-    if (allowedOrigins.includes(normalizedOrigin) || process.env.NODE_ENV === 'development') {
+    const isVercel = /\.vercel\.app$/.test(normalizedOrigin);
+    if (allowedOrigins.includes(normalizedOrigin) || isVercel || process.env.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
