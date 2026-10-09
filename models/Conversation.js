@@ -3,6 +3,11 @@ const mongoose = require('mongoose');
 const ConversationSchema = new mongoose.Schema({
   pairKey: { type: String, required: true, unique: true, index: true },
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }],
+  hiddenFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  displayNames: [{
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    name: { type: String, maxlength: 80, trim: true }
+  }],
   lastMessageAt: { type: Date, default: Date.now, index: true }
 }, { timestamps: true });
 

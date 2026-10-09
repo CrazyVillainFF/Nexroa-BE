@@ -166,7 +166,10 @@ const listConversations = async (req, res, next) => {
     const acceptedPeerIds = new Set(acceptedConnections.map(({ requester, recipient }) => (
       requester.toString() === req.user._id.toString() ? recipient.toString() : requester.toString()
     )));
-    const visibleConversations = conversationsWithPeers.filter(({ peer }) => acceptedPeerIds.has(peer._id.toString()));
+    const visibleConversations = conversationsWithPeers.filter(({ conversation, peer }) => (
+      acceptedPeerIds.has(peer._id.toString()) &&
+      !conversation.hiddenFor.some((userId) => userId.toString() === req.user._id.toString())
+    ));
     const visibleConversationIds = visibleConversations.map(({ conversation }) => conversation._id);
     const latestMessages = visibleConversationIds.length ? await DirectMessage.aggregate([
       { $match: { conversation: { $in: visibleConversationIds } } },
@@ -190,6 +193,7 @@ const listConversations = async (req, res, next) => {
     const visible = visibleConversations.map(({ conversation, peer }) => ({
       _id: conversation._id,
       peer,
+      displayName: conversation.displayNames.find(({ user }) => user.toString() === req.user._id.toString())?.name || '',
       lastMessageAt: conversation.lastMessageAt,
       lastMessage: latestByConversation.get(conversation._id.toString())?.lastMessage || null,
       unreadCount: latestByConversation.get(conversation._id.toString())?.unreadCount || 0
@@ -224,8 +228,44 @@ const openConversation = async (req, res, next) => {
         conversation = await Conversation.findOne({ pairKey });
       }
     }
+    if (conversation.hiddenFor.some((userId) => userId.toString() === req.user._id.toString())) {
+      conversation.hiddenFor = conversation.hiddenFor.filter((userId) => userId.toString() !== req.user._id.toString());
+      await conversation.save();
+    }
     res.set('Cache-Control', 'private, no-store');
-    res.json({ success: true, conversation: { _id: conversation._id, peer } });
+    res.json({ success: true, conversation: {
+      _id: conversation._id,
+      peer,
+      displayName: conversation.displayNames.find(({ user }) => user.toString() === req.user._id.toString())?.name || ''
+    } });
+  } catch (error) { next(error); }
+};
+
+const deleteConversationForUser = async (req, res, next) => {
+  try {
+    const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
+    if (!authorized) return res.status(404).json({ success: false, message: 'Conversation not found or no longer available.' });
+    await Conversation.updateOne(
+      { _id: authorized.conversation._id, participants: req.user._id },
+      { $addToSet: { hiddenFor: req.user._id } }
+    );
+    res.json({ success: true });
+  } catch (error) { next(error); }
+};
+
+const updateConversationName = async (req, res, next) => {
+  try {
+    const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
+    if (!authorized) return res.status(404).json({ success: false, message: 'Conversation not found or no longer available.' });
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : null;
+    if (name === null || name.length > 80) {
+      return res.status(400).json({ success: false, message: 'Chat name must be 80 characters or fewer.' });
+    }
+    const conversation = authorized.conversation;
+    conversation.displayNames = conversation.displayNames.filter(({ user }) => user.toString() !== req.user._id.toString());
+    if (name) conversation.displayNames.push({ user: req.user._id, name });
+    await conversation.save();
+    res.json({ success: true, displayName: name });
   } catch (error) { next(error); }
 };
 
@@ -267,7 +307,10 @@ const sendMessage = async (req, res, next) => {
         }),
         Conversation.updateOne(
           { _id: authorized.conversation._id },
-          { $max: { lastMessageAt: messageTimestamp } }
+          {
+            $max: { lastMessageAt: messageTimestamp },
+            $pull: { hiddenFor: { $in: authorized.conversation.participants } }
+          }
         )
       ]);
       res.set('Cache-Control', 'private, no-store');
@@ -299,6 +342,7 @@ const sendMessage = async (req, res, next) => {
       readBy: [req.user._id]
     });
     authorized.conversation.lastMessageAt = message.createdAt;
+    authorized.conversation.hiddenFor = [];
     await authorized.conversation.save();
 
     res.status(201).json({ success: true, message });
@@ -335,4 +379,4 @@ const syncLegacyMessages = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getContacts, getOwnKey, getOwnKeyBackups, saveOwnKeyBackup, saveOwnKey, listConversations, openConversation, getMessages, sendMessage, syncLegacyMessages };
+module.exports = { getContacts, getOwnKey, getOwnKeyBackups, saveOwnKeyBackup, saveOwnKey, listConversations, openConversation, deleteConversationForUser, updateConversationName, getMessages, sendMessage, syncLegacyMessages };

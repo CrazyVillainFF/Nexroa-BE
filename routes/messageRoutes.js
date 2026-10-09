@@ -8,6 +8,8 @@ const {
   saveOwnKeyBackup,
   listConversations,
   openConversation,
+  deleteConversationForUser,
+  updateConversationName,
   getMessages,
   sendMessage,
   syncLegacyMessages
@@ -22,6 +24,8 @@ router.get('/keys/backups', getOwnKeyBackups);
 router.post('/keys/backups', saveOwnKeyBackup);
 router.get('/conversations', listConversations);
 router.post('/conversations/:userId', openConversation);
+router.delete('/conversations/:conversationId', deleteConversationForUser);
+router.patch('/conversations/:conversationId', updateConversationName);
 router.get('/conversations/:conversationId/messages', getMessages);
 router.post('/conversations/:conversationId/messages', sendMessage);
 router.post('/conversations/:conversationId/messages/sync-legacy', syncLegacyMessages);
