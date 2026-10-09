@@ -138,8 +138,35 @@ const deleteComment = async (req, res, next) => {
   }
 };
 
+// @desc    Edit a comment
+// @route   PUT /api/comments/:id
+// @access  Private (comment author only)
+const updateComment = async (req, res, next) => {
+  try {
+    const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+    if (!content) return res.status(400).json({ success: false, message: 'Comment content cannot be empty.' });
+    if (content.length > 1000) return res.status(400).json({ success: false, message: 'Comment cannot exceed 1000 characters.' });
+
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found.' });
+    if (comment.author.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to edit this comment.' });
+    }
+
+    comment.content = content;
+    await comment.save();
+    const updatedComment = await Comment.findById(comment._id)
+      .populate('author', 'name headline profilePicture company jobTitle');
+
+    res.status(200).json({ success: true, message: 'Comment updated successfully.', comment: updatedComment });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   addComment,
   getPostComments,
-  deleteComment
+  deleteComment,
+  updateComment
 };
