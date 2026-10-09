@@ -4,6 +4,7 @@ const Conversation = require('../models/Conversation');
 const DirectMessage = require('../models/DirectMessage');
 const User = require('../models/User');
 const { isAcceptedPublicKeyPair } = require('../utils/publicEncryptionKeys');
+const { isValidEncryptedKeyBackup } = require('../utils/encryptedKeyBackup');
 
 const hasAcceptedConnection = async (userId, peerId) => Boolean(await Connection.exists({
   status: 'accepted',
@@ -50,6 +51,60 @@ const getOwnKey = async (req, res, next) => {
     const user = await User.findById(req.user._id).select('+encryptionPublicKey +encryptionSigningPublicKey encryptionKeyVersion');
     res.set('Cache-Control', 'private, no-store');
     res.json({ success: true, publicKey: user?.encryptionPublicKey || '', signingPublicKey: user?.encryptionSigningPublicKey || '', keyVersion: user?.encryptionKeyVersion || 0 });
+  } catch (error) { next(error); }
+};
+
+const getOwnKeyBackups = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('+encryptionKeyBackups').lean();
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ success: true, backups: (user?.encryptionKeyBackups || []).map((backup) => ({
+      _id: backup._id,
+      formatVersion: backup.formatVersion,
+      keyVersion: backup.keyVersion,
+      publicKeyFingerprint: backup.publicKeyFingerprint,
+      kdf: backup.kdf,
+      iterations: backup.iterations,
+      cipher: backup.cipher,
+      salt: backup.salt,
+      iv: backup.iv,
+      ciphertext: backup.ciphertext,
+      createdAt: backup.createdAt
+    })) });
+  } catch (error) { next(error); }
+};
+
+const saveOwnKeyBackup = async (req, res, next) => {
+  try {
+    const backup = req.body || {};
+    const user = await User.findById(req.user._id).select('+encryptionPublicKey +encryptionSigningPublicKey +encryptionKeyBackups encryptionKeyVersion');
+    if (!user?.encryptionPublicKey || !user?.encryptionSigningPublicKey) {
+      return res.status(409).json({ success: false, message: 'Set up encrypted messaging on this account before creating a recovery backup.' });
+    }
+    if (user.encryptionKeyBackups.length >= 5) {
+      return res.status(409).json({ success: false, message: 'This account already has five encrypted recovery backups. Keep them safe and remove none from the original device.' });
+    }
+
+    if (!isValidEncryptedKeyBackup(backup, {
+      keyVersion: user.encryptionKeyVersion,
+      publicKey: user.encryptionPublicKey,
+      signingPublicKey: user.encryptionSigningPublicKey
+    })) return res.status(400).json({ success: false, message: 'Invalid encrypted recovery backup.' });
+
+    user.encryptionKeyBackups.push({
+      formatVersion: backup.formatVersion,
+      keyVersion: backup.keyVersion,
+      publicKeyFingerprint: backup.publicKeyFingerprint,
+      kdf: backup.kdf,
+      iterations: backup.iterations,
+      cipher: backup.cipher,
+      salt: backup.salt,
+      iv: backup.iv,
+      ciphertext: backup.ciphertext
+    });
+    await user.save();
+    res.set('Cache-Control', 'private, no-store');
+    res.status(201).json({ success: true, backupCount: user.encryptionKeyBackups.length });
   } catch (error) { next(error); }
 };
 
@@ -194,4 +249,4 @@ const sendMessage = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getContacts, getOwnKey, saveOwnKey, listConversations, openConversation, getMessages, sendMessage };
+module.exports = { getContacts, getOwnKey, saveOwnKey, getOwnKeyBackups, saveOwnKeyBackup, listConversations, openConversation, getMessages, sendMessage };

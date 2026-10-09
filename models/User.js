@@ -19,6 +19,19 @@ const ExperienceSchema = new mongoose.Schema({
   description: { type: String }
 }, { _id: true });
 
+const EncryptedKeyBackupSchema = new mongoose.Schema({
+  formatVersion: { type: Number, required: true, enum: [1] },
+  keyVersion: { type: Number, required: true, min: 1 },
+  publicKeyFingerprint: { type: String, required: true, match: /^[a-f0-9]{64}$/ },
+  kdf: { type: String, required: true, enum: ['PBKDF2-SHA-256'] },
+  iterations: { type: Number, required: true, enum: [600000] },
+  cipher: { type: String, required: true, enum: ['AES-256-GCM'] },
+  salt: { type: String, required: true, maxlength: 64 },
+  iv: { type: String, required: true, maxlength: 32 },
+  ciphertext: { type: String, required: true, maxlength: 20000 },
+  createdAt: { type: Date, default: Date.now }
+}, { _id: true });
+
 const UserSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -57,6 +70,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: 'San Francisco, CA'
   },
+  locationCountry: { type: String, trim: true, maxlength: 100, default: '' },
+  locationCountryCode: { type: String, uppercase: true, match: /^[A-Z]{2}$|^$/, default: '' },
+  locationRegion: { type: String, trim: true, maxlength: 120, default: '' },
+  locationRegionCode: { type: String, uppercase: true, maxlength: 12, default: '' },
   website: {
     type: String,
     default: ''
@@ -125,6 +142,11 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+  encryptionKeyBackups: {
+    type: [EncryptedKeyBackupSchema],
+    default: [],
+    select: false
   },
   tokenVersion: {
     type: Number,

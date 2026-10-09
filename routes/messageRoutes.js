@@ -4,6 +4,8 @@ const {
   getContacts,
   getOwnKey,
   saveOwnKey,
+  getOwnKeyBackups,
+  saveOwnKeyBackup,
   listConversations,
   openConversation,
   getMessages,
@@ -15,6 +17,8 @@ router.use(protect);
 router.get('/contacts', getContacts);
 router.get('/keys/me', getOwnKey);
 router.put('/keys/me', saveOwnKey);
+router.get('/keys/backups', getOwnKeyBackups);
+router.post('/keys/backups', saveOwnKeyBackup);
 router.get('/conversations', listConversations);
 router.post('/conversations/:userId', openConversation);
 router.get('/conversations/:conversationId/messages', getMessages);

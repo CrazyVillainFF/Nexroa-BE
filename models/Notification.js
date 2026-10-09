@@ -21,6 +21,11 @@ const NotificationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Post'
   },
+  connection: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Connection',
+    default: null
+  },
   message: {
     type: String,
     required: true
@@ -35,5 +40,9 @@ const NotificationSchema = new mongoose.Schema({
 });
 
 NotificationSchema.index({ recipient: 1, createdAt: -1 });
+NotificationSchema.index(
+  { recipient: 1, connection: 1, type: 1 },
+  { unique: true, partialFilterExpression: { connection: { $type: 'objectId' } } }
+);
 
 module.exports = mongoose.model('Notification', NotificationSchema);

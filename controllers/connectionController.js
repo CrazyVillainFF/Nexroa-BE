@@ -57,12 +57,17 @@ const sendConnectionRequest = async (req, res, next) => {
     });
 
     // Create Notification
-    await Notification.create({
-      recipient: recipientId,
-      sender: requesterId,
-      type: 'connection_request',
-      message: `${req.user.name} sent you a connection request.`
-    });
+    await Notification.findOneAndUpdate(
+      { recipient: recipientId, connection: connection._id, type: 'connection_request' },
+      { $setOnInsert: {
+        recipient: recipientId,
+        sender: requesterId,
+        connection: connection._id,
+        type: 'connection_request',
+        message: `${req.user.name} sent you a connection request.`
+      } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     res.status(201).json({
       success: true,
@@ -118,12 +123,17 @@ const acceptConnectionRequest = async (req, res, next) => {
     });
 
     // Notify requester that their connection request was accepted
-    await Notification.create({
-      recipient: connection.requester,
-      sender: currentUserId,
-      type: 'connection_accepted',
-      message: `${req.user.name} accepted your connection request. You are now connected!`
-    });
+    await Notification.findOneAndUpdate(
+      { recipient: connection.requester, connection: connection._id, type: 'connection_accepted' },
+      { $setOnInsert: {
+        recipient: connection.requester,
+        sender: currentUserId,
+        connection: connection._id,
+        type: 'connection_accepted',
+        message: `${req.user.name} accepted your connection request. You are now connected!`
+      } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     res.status(200).json({
       success: true,

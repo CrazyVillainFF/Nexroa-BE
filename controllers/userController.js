@@ -208,6 +208,10 @@ const updateProfile = async (req, res, next) => {
       headline,
       bio,
       location,
+      locationCountry,
+      locationCountryCode,
+      locationRegion,
+      locationRegionCode,
       website,
       company,
       jobTitle,
@@ -229,6 +233,28 @@ const updateProfile = async (req, res, next) => {
     if (headline !== undefined) user.headline = headline;
     if (bio !== undefined) user.bio = bio;
     if (location !== undefined) user.location = location;
+    if ([locationCountry, locationCountryCode, locationRegion, locationRegionCode].some((value) => value !== undefined)) {
+      const clearingLocation = [locationCountry, locationCountryCode, locationRegion, locationRegionCode]
+        .every((value) => value === undefined || value === '');
+      if (clearingLocation) {
+        user.locationCountry = '';
+        user.locationCountryCode = '';
+        user.locationRegion = '';
+        user.locationRegionCode = '';
+      } else {
+        if (typeof locationCountry !== 'string' || !locationCountry.trim() || locationCountry.length > 100 ||
+            typeof locationCountryCode !== 'string' || !/^[A-Za-z]{2}$/.test(locationCountryCode) ||
+            typeof locationRegion !== 'string' || !locationRegion.trim() || locationRegion.length > 120 ||
+            (locationRegionCode !== undefined && (typeof locationRegionCode !== 'string' || locationRegionCode.length > 12))) {
+          return res.status(400).json({ success: false, message: 'Choose a valid country and state or region.' });
+        }
+        user.locationCountry = locationCountry.trim();
+        user.locationCountryCode = locationCountryCode.toUpperCase();
+        user.locationRegion = locationRegion.trim();
+        user.locationRegionCode = (locationRegionCode || '').toUpperCase();
+        if (location === undefined) user.location = `${user.locationRegion}, ${user.locationCountry}`;
+      }
+    }
     if (website !== undefined) user.website = website;
     if (company !== undefined) user.company = company;
     if (jobTitle !== undefined) user.jobTitle = jobTitle;

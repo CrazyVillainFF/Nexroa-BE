@@ -8,6 +8,7 @@ const getNotifications = async (req, res, next) => {
     const notifications = await Notification.find({ recipient: req.user._id })
       .populate('sender', 'name headline profilePicture company jobTitle')
       .populate('post', 'content image')
+      .populate('connection', 'status requester recipient')
       .sort({ createdAt: -1 })
       .limit(30);
 
