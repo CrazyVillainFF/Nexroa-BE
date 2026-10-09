@@ -1,7 +1,7 @@
 {
-  "name": "nexora-server",
+  "name": "vuprise-server",
   "version": "1.0.0",
-  "description": "NEXORA Premium Professional Networking Platform Backend",
+  "description": "Vuprise professional networking platform backend",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

@@ -1,6 +1,6 @@
-# Nexora message-key recovery
+# Vuprise message-key recovery
 
-Nexora stores each user's public encryption and signing keys on the server. Private keys remain in the browser's IndexedDB. For keys created by the recovery-capable client, a user can explicitly create a recovery backup: the browser exports the keys, encrypts the bundle with AES-256-GCM, and derives the encryption key from a user-chosen recovery passphrase with PBKDF2-HMAC-SHA-256 (600,000 iterations and a fresh random salt). The encrypted blob and public-key fingerprint are stored on the authenticated account. The passphrase and plaintext private keys are not sent to the API.
+Vuprise stores each user's public encryption and signing keys on the server. Private keys remain in the browser's IndexedDB. For keys created by the recovery-capable client, a user can explicitly create a recovery backup: the browser exports the keys, encrypts the bundle with AES-256-GCM, and derives the encryption key from a user-chosen recovery passphrase with PBKDF2-HMAC-SHA-256 (600,000 iterations and a fresh random salt). The encrypted blob and public-key fingerprint are stored on the authenticated account. The passphrase and plaintext private keys are not sent to the API.
 
 The backup is bound to the account id and registered public-key fingerprint using AES-GCM additional authenticated data. The API only accepts the supported format and matching key version/public-key fingerprint; backup routes require normal authentication. Backups are append-only, with a limit of five. There is no server-side password reset for a recovery passphrase. Losing the passphrase means that backup cannot be opened.
 

@@ -95,9 +95,9 @@ const requestPasswordReset = async (req, res, next) => {
       await createTransport().sendMail({
         from: process.env.SMTP_FROM,
         to: user.email,
-        subject: 'Your Nexora password reset code',
-        text: `Your Nexora password reset code is ${code}. It expires in 10 minutes. If you did not request this, ignore this message.`,
-        html: `<p>Your Nexora password reset code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:8px">${code}</p><p>It expires in 10 minutes. If you did not request this, ignore this message.</p>`
+        subject: 'Your Vuprise password reset code',
+        text: `Your Vuprise password reset code is ${code}. It expires in 10 minutes. If you did not request this, ignore this message.`,
+        html: `<p>Your Vuprise password reset code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:8px">${code}</p><p>It expires in 10 minutes. If you did not request this, ignore this message.</p>`
       });
     } catch (mailError) {
       await Promise.all([

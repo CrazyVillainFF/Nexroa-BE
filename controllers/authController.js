@@ -89,7 +89,7 @@ const register = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Account created successfully. Welcome to NEXORA!',
+      message: 'Account created successfully. Welcome to Vuprise!',
       token,
       user: userObj
     });

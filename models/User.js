@@ -58,7 +58,7 @@ const UserSchema = new mongoose.Schema({
   },
   headline: {
     type: String,
-    default: 'Professional at NEXORA',
+    default: 'Professional at Vuprise',
     maxlength: [140, 'Headline cannot exceed 140 characters']
   },
   bio: {
@@ -162,7 +162,7 @@ const UserSchema = new mongoose.Schema({
 // Virtual for profile completion percentage
 UserSchema.virtual('profileCompletion').get(function () {
   let score = 20; // baseline for created account with name & email
-  if (this.headline && this.headline !== 'Professional at NEXORA') score += 15;
+  if (this.headline && !['Professional at Vuprise', 'Professional at NEXORA'].includes(this.headline)) score += 15;
   if (this.bio && this.bio.length > 20) score += 15;
   if (this.profilePicture) score += 15;
   if (this.coverImage) score += 10;

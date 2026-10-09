@@ -226,7 +226,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Root / Health check endpoint (Handles GET and HEAD for Render health checks)
 app.get('/', (req, res) => {
   res.status(200).json({
-    message: 'Nexora API is running',
+    message: 'Vuprise API is running',
     status: 'ok'
   });
 });
@@ -236,7 +236,7 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'online',
     timestamp: new Date().toISOString(),
-    service: 'NEXORA Premium Networking API',
+    service: 'Vuprise Professional Networking API',
     version: '1.0.0'
   });
 });
@@ -261,7 +261,7 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
   console.log(`\n======================================================`);
-  console.log(`🚀 NEXORA Server running on port http://localhost:${PORT}`);
+  console.log(`🚀 VUPRISE Server running on port http://localhost:${PORT}`);
   console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`======================================================\n`);
 });
