@@ -3,6 +3,7 @@ const Connection = require('../models/Connection');
 const Conversation = require('../models/Conversation');
 const DirectMessage = require('../models/DirectMessage');
 const User = require('../models/User');
+const { isAcceptedPublicKeyPair } = require('../utils/publicEncryptionKeys');
 
 const hasAcceptedConnection = async (userId, peerId) => Boolean(await Connection.exists({
   status: 'accepted',
@@ -66,8 +67,7 @@ const saveOwnKey = async (req, res, next) => {
     } catch {
       return res.status(400).json({ success: false, message: 'Invalid public encryption key.' });
     }
-    if (parsedEncryptionKey.kty !== 'RSA' || parsedEncryptionKey.alg !== 'RSA-OAEP-256' || !parsedEncryptionKey.n || !parsedEncryptionKey.e || parsedEncryptionKey.d ||
-        parsedSigningKey.kty !== 'EC' || parsedSigningKey.alg !== 'ES256' || parsedSigningKey.crv !== 'P-256' || !parsedSigningKey.x || !parsedSigningKey.y || parsedSigningKey.d) {
+    if (!isAcceptedPublicKeyPair(parsedEncryptionKey, parsedSigningKey)) {
       return res.status(400).json({ success: false, message: 'Only public RSA-OAEP and ECDSA P-256 keys are accepted.' });
     }
 
