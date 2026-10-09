@@ -3,6 +3,7 @@ const Connection = require('../models/Connection');
 const Post = require('../models/Post');
 const { processUploadedFile } = require('../middleware/uploadMiddleware');
 const { postVisibilityFilter, addPostVisibility } = require('../utils/postVisibility');
+const { isVerifiedAccount } = require('../utils/verifiedAccount');
 
 // @desc    Get all users with filtering and pagination
 // @route   GET /api/users
@@ -84,13 +85,18 @@ const getUsers = async (req, res, next) => {
       });
     }
 
+    const responseUsers = enhancedUsers.map((entry) => {
+      const user = typeof entry.toObject === 'function' ? entry.toObject() : entry;
+      return { ...user, isVerifiedAccount: isVerifiedAccount(user.email) };
+    });
+
     res.status(200).json({
       success: true,
-      count: enhancedUsers.length,
+      count: responseUsers.length,
       total,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
-      users: enhancedUsers
+      users: responseUsers
     });
   } catch (error) {
     next(error);
@@ -121,12 +127,19 @@ const getSuggestedUsers = async (req, res, next) => {
     const suggested = await User.find({
       _id: { $nin: excludedIds }
     })
-      .select('name headline profilePicture company jobTitle location skills connections')
+      .select('email name headline profilePicture company jobTitle location skills connections')
       .limit(6);
+
+    const suggestedUsers = suggested.map((entry) => {
+      const user = entry.toObject();
+      const isVerified = isVerifiedAccount(user.email);
+      delete user.email;
+      return { ...user, isVerifiedAccount: isVerified };
+    });
 
     res.status(200).json({
       success: true,
-      users: suggested
+      users: suggestedUsers
     });
   } catch (error) {
     next(error);
@@ -152,6 +165,7 @@ const getUserById = async (req, res, next) => {
     }
 
     const userObj = user.toObject();
+    userObj.isVerifiedAccount = isVerifiedAccount(userObj.email);
 
     // Check connection status if requester is authenticated
     if (req.user) {
