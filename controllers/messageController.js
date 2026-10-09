@@ -151,14 +151,38 @@ const listConversations = async (req, res, next) => {
     const conversations = await Conversation.find({ participants: req.user._id })
       .sort({ lastMessageAt: -1 })
       .populate('participants', 'name headline profilePicture');
-    const visible = [];
-    for (const conversation of conversations) {
-      const peer = conversation.participants.find((participant) => participant._id.toString() !== req.user._id.toString());
-      if (!peer || !(await hasAcceptedConnection(req.user._id, peer._id))) continue;
-      const lastMessage = await DirectMessage.findOne({ conversation: conversation._id })
-        .sort({ createdAt: -1 }).select('createdAt sender text');
-      visible.push({ _id: conversation._id, peer, lastMessageAt: conversation.lastMessageAt, lastMessage });
-    }
+    const conversationsWithPeers = conversations.map((conversation) => ({
+      conversation,
+      peer: conversation.participants.find((participant) => participant._id.toString() !== req.user._id.toString())
+    })).filter(({ peer }) => Boolean(peer));
+    const peerIds = conversationsWithPeers.map(({ peer }) => peer._id);
+    const acceptedConnections = peerIds.length ? await Connection.find({
+      status: 'accepted',
+      $or: [
+        { requester: req.user._id, recipient: { $in: peerIds } },
+        { requester: { $in: peerIds }, recipient: req.user._id }
+      ]
+    }).select('requester recipient').lean() : [];
+    const acceptedPeerIds = new Set(acceptedConnections.map(({ requester, recipient }) => (
+      requester.toString() === req.user._id.toString() ? recipient.toString() : requester.toString()
+    )));
+    const visibleConversations = conversationsWithPeers.filter(({ peer }) => acceptedPeerIds.has(peer._id.toString()));
+    const visibleConversationIds = visibleConversations.map(({ conversation }) => conversation._id);
+    const latestMessages = visibleConversationIds.length ? await DirectMessage.aggregate([
+      { $match: { conversation: { $in: visibleConversationIds } } },
+      { $sort: { createdAt: -1 } },
+      { $group: {
+        _id: '$conversation',
+        lastMessage: { $first: { _id: '$_id', createdAt: '$createdAt', sender: '$sender', text: '$text' } }
+      } }
+    ]) : [];
+    const lastMessageByConversation = new Map(latestMessages.map(({ _id, lastMessage }) => [_id.toString(), lastMessage]));
+    const visible = visibleConversations.map(({ conversation, peer }) => ({
+      _id: conversation._id,
+      peer,
+      lastMessageAt: conversation.lastMessageAt,
+      lastMessage: lastMessageByConversation.get(conversation._id.toString()) || null
+    }));
     res.set('Cache-Control', 'private, no-store');
     res.json({ success: true, conversations: visible });
   } catch (error) { next(error); }
@@ -170,10 +194,13 @@ const openConversation = async (req, res, next) => {
     if (!mongoose.isValidObjectId(peerId) || peerId === req.user._id.toString()) {
       return res.status(400).json({ success: false, message: 'Choose a valid connected person.' });
     }
-    if (!(await hasAcceptedConnection(req.user._id, peerId))) {
+    const [accepted, peer] = await Promise.all([
+      hasAcceptedConnection(req.user._id, peerId),
+      User.findById(peerId).select('name headline profilePicture +encryptionPublicKey +encryptionSigningPublicKey encryptionKeyVersion')
+    ]);
+    if (!accepted) {
       return res.status(403).json({ success: false, message: 'Messages are only available between accepted connections.' });
     }
-    const peer = await User.findById(peerId).select('name headline profilePicture +encryptionPublicKey +encryptionSigningPublicKey encryptionKeyVersion');
     if (!peer) return res.status(404).json({ success: false, message: 'Connected account not found.' });
 
     const pairKey = [req.user._id.toString(), peer._id.toString()].sort().join(':');
@@ -196,12 +223,14 @@ const getMessages = async (req, res, next) => {
     const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
     if (!authorized) return res.status(404).json({ success: false, message: 'Conversation not found or no longer available.' });
 
-    const messages = await DirectMessage.find({ conversation: authorized.conversation._id })
-      .sort({ createdAt: -1 }).limit(200).lean();
-    await DirectMessage.updateMany(
-      { conversation: authorized.conversation._id, sender: { $ne: req.user._id }, readBy: { $ne: req.user._id } },
-      { $addToSet: { readBy: req.user._id } }
-    );
+    const [messages] = await Promise.all([
+      DirectMessage.find({ conversation: authorized.conversation._id })
+        .sort({ createdAt: -1 }).limit(200).lean(),
+      DirectMessage.updateMany(
+        { conversation: authorized.conversation._id, sender: { $ne: req.user._id }, readBy: { $ne: req.user._id } },
+        { $addToSet: { readBy: req.user._id } }
+      )
+    ]);
     res.set('Cache-Control', 'private, no-store');
     res.json({ success: true, messages: messages.reverse() });
   } catch (error) { next(error); }
