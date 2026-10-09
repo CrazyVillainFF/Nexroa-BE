@@ -258,4 +258,34 @@ const sendMessage = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getContacts, getOwnKey, saveOwnKey, getOwnKeyBackups, saveOwnKeyBackup, listConversations, openConversation, getMessages, sendMessage };
+const syncLegacyMessages = async (req, res, next) => {
+  try {
+    const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
+    if (!authorized) return res.status(404).json({ success: false, message: 'Conversation not found or no longer available.' });
+
+    const entries = req.body?.messages;
+    if (!Array.isArray(entries) || entries.length > 200) {
+      return res.status(400).json({ success: false, message: 'Provide up to 200 messages to sync.' });
+    }
+    const updates = [];
+    for (const entry of entries) {
+      if (!mongoose.isValidObjectId(entry?.id)) {
+        return res.status(400).json({ success: false, message: 'Invalid legacy message id.' });
+      }
+      const normalized = normalizeDirectMessagePayload({ text: entry.text });
+      if (normalized.error) return res.status(400).json({ success: false, message: normalized.error });
+      updates.push({
+        updateOne: {
+          filter: { _id: entry.id, conversation: authorized.conversation._id, text: { $exists: false } },
+          update: { $set: { text: normalized.text } }
+        }
+      });
+    }
+
+    const result = updates.length ? await DirectMessage.bulkWrite(updates, { ordered: false }) : { modifiedCount: 0 };
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ success: true, synced: result.modifiedCount || 0 });
+  } catch (error) { next(error); }
+};
+
+module.exports = { getContacts, getOwnKey, getOwnKeyBackups, saveOwnKeyBackup, saveOwnKey, listConversations, openConversation, getMessages, sendMessage, syncLegacyMessages };

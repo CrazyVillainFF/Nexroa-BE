@@ -9,7 +9,8 @@ const {
   listConversations,
   openConversation,
   getMessages,
-  sendMessage
+  sendMessage,
+  syncLegacyMessages
 } = require('../controllers/messageController');
 
 const router = express.Router();
@@ -23,5 +24,6 @@ router.get('/conversations', listConversations);
 router.post('/conversations/:userId', openConversation);
 router.get('/conversations/:conversationId/messages', getMessages);
 router.post('/conversations/:conversationId/messages', sendMessage);
+router.post('/conversations/:conversationId/messages/sync-legacy', syncLegacyMessages);
 
 module.exports = router;
