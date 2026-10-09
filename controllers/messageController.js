@@ -173,15 +173,26 @@ const listConversations = async (req, res, next) => {
       { $sort: { createdAt: -1 } },
       { $group: {
         _id: '$conversation',
-        lastMessage: { $first: { _id: '$_id', createdAt: '$createdAt', sender: '$sender', text: '$text' } }
+        lastMessage: { $first: { _id: '$_id', createdAt: '$createdAt', sender: '$sender', text: '$text' } },
+        unreadCount: { $sum: { $cond: [
+          { $and: [
+            { $ne: ['$sender', req.user._id] },
+            { $not: [{ $in: [req.user._id, { $ifNull: ['$readBy', []] }] }] }
+          ] },
+          1,
+          0
+        ] } }
       } }
     ]) : [];
-    const lastMessageByConversation = new Map(latestMessages.map(({ _id, lastMessage }) => [_id.toString(), lastMessage]));
+    const latestByConversation = new Map(latestMessages.map(({ _id, lastMessage, unreadCount }) => (
+      [_id.toString(), { lastMessage, unreadCount }]
+    )));
     const visible = visibleConversations.map(({ conversation, peer }) => ({
       _id: conversation._id,
       peer,
       lastMessageAt: conversation.lastMessageAt,
-      lastMessage: lastMessageByConversation.get(conversation._id.toString()) || null
+      lastMessage: latestByConversation.get(conversation._id.toString())?.lastMessage || null,
+      unreadCount: latestByConversation.get(conversation._id.toString())?.unreadCount || 0
     }));
     res.set('Cache-Control', 'private, no-store');
     res.json({ success: true, conversations: visible });
