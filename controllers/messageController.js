@@ -269,6 +269,55 @@ const updateConversationName = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const deleteMessage = async (req, res, next) => {
+  try {
+    const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
+    if (!authorized || !mongoose.isValidObjectId(req.params.messageId)) {
+      return res.status(404).json({ success: false, message: 'Message not found.' });
+    }
+    const message = await DirectMessage.findOneAndDelete({
+      _id: req.params.messageId,
+      conversation: authorized.conversation._id,
+      sender: req.user._id
+    });
+    if (!message) return res.status(404).json({ success: false, message: 'Only your own messages can be deleted.' });
+
+    const latestMessage = await DirectMessage.findOne({ conversation: authorized.conversation._id })
+      .sort({ createdAt: -1 }).select('createdAt').lean();
+    await Conversation.updateOne(
+      { _id: authorized.conversation._id },
+      { $set: { lastMessageAt: latestMessage?.createdAt || authorized.conversation.createdAt } }
+    );
+    res.json({ success: true, deletedMessageId: message._id });
+  } catch (error) { next(error); }
+};
+
+const updateMessage = async (req, res, next) => {
+  try {
+    const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
+    if (!authorized || !mongoose.isValidObjectId(req.params.messageId)) {
+      return res.status(404).json({ success: false, message: 'Message not found.' });
+    }
+    const normalized = normalizeDirectMessagePayload(req.body);
+    if (normalized.error || normalized.kind !== 'text') {
+      return res.status(400).json({ success: false, message: normalized.error || 'Only text messages can be edited.' });
+    }
+    const message = await DirectMessage.findOne({
+      _id: req.params.messageId,
+      conversation: authorized.conversation._id,
+      sender: req.user._id
+    });
+    if (!message) return res.status(404).json({ success: false, message: 'Only your own messages can be edited.' });
+    if (typeof message.text !== 'string') {
+      return res.status(409).json({ success: false, message: 'Older encrypted messages can’t be edited.' });
+    }
+    message.text = normalized.text;
+    message.editedAt = new Date();
+    await message.save();
+    res.json({ success: true, message });
+  } catch (error) { next(error); }
+};
+
 const getMessages = async (req, res, next) => {
   try {
     const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
@@ -379,4 +428,4 @@ const syncLegacyMessages = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getContacts, getOwnKey, getOwnKeyBackups, saveOwnKeyBackup, saveOwnKey, listConversations, openConversation, deleteConversationForUser, updateConversationName, getMessages, sendMessage, syncLegacyMessages };
+module.exports = { getContacts, getOwnKey, getOwnKeyBackups, saveOwnKeyBackup, saveOwnKey, listConversations, openConversation, deleteConversationForUser, updateConversationName, deleteMessage, updateMessage, getMessages, sendMessage, syncLegacyMessages };

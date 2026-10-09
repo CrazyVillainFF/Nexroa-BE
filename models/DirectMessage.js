@@ -13,6 +13,7 @@ const DirectMessageSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     value: { type: String, required: true, maxlength: 2048 }
   }],
+  editedAt: { type: Date, default: null },
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
