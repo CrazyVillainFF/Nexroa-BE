@@ -245,6 +245,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
+// Comments are nested under posts for create/list operations (the client calls
+// /api/posts/:postId/comments). Keep the standalone mount for comment deletion.
+app.use('/api/posts', commentRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/notifications', notificationRoutes);
