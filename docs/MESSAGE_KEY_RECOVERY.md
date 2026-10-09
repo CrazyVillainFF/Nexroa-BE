@@ -15,3 +15,10 @@ For a recovery-capable key, create and verify a backup on the device that has th
 This protects private keys at rest in the database, but does not make the server or deployed application untrusted. The server authenticates accounts and serves the client code; a compromised server, deployment pipeline, or same-origin script could deliver code that captures a passphrase or key while the user restores or sends a message. Use HTTPS, protect the account and deployment, and use a unique high-entropy recovery passphrase. This implementation has not received an independent cryptographic audit.
 
 The schema change is additive (`encryptionKeyBackups`, default empty); it does not require a data migration or environment variable. Deploy the backend route/model changes and client together before using recovery. This feature only restores identity keys; it does not by itself fix unrelated message delivery, conversation authorization, or real-time synchronization problems.
+# Messaging format transition
+
+New direct messages are account-authenticated and synchronized through the server so they are available on any device after sign-in. New message text is stored as readable text in the database; it is **not end-to-end encrypted**, and server/database operators can access it. Access is restricted by the authenticated API and accepted-connection checks. Use HTTPS in production and protect database access/backups.
+
+Older messages retain their original encrypted payload and are not altered. They can only be read where the old device private key (or a valid recovery backup) is available. The app does not reset or replace those keys, and new messages can be sent even if an old key is missing.
+
+The recovery system below remains for users who need to restore old encrypted history; it is not required to use new account-synced chats.

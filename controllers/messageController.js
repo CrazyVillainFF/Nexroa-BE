@@ -5,6 +5,7 @@ const DirectMessage = require('../models/DirectMessage');
 const User = require('../models/User');
 const { isAcceptedPublicKeyPair } = require('../utils/publicEncryptionKeys');
 const { isValidEncryptedKeyBackup } = require('../utils/encryptedKeyBackup');
+const { normalizeDirectMessagePayload } = require('../utils/directMessagePayload');
 
 const hasAcceptedConnection = async (userId, peerId) => Boolean(await Connection.exists({
   status: 'accepted',
@@ -155,7 +156,7 @@ const listConversations = async (req, res, next) => {
       const peer = conversation.participants.find((participant) => participant._id.toString() !== req.user._id.toString());
       if (!peer || !(await hasAcceptedConnection(req.user._id, peer._id))) continue;
       const lastMessage = await DirectMessage.findOne({ conversation: conversation._id })
-        .sort({ createdAt: -1 }).select('createdAt sender');
+        .sort({ createdAt: -1 }).select('createdAt sender text');
       visible.push({ _id: conversation._id, peer, lastMessageAt: conversation.lastMessageAt, lastMessage });
     }
     res.set('Cache-Control', 'private, no-store');
@@ -172,14 +173,8 @@ const openConversation = async (req, res, next) => {
     if (!(await hasAcceptedConnection(req.user._id, peerId))) {
       return res.status(403).json({ success: false, message: 'Messages are only available between accepted connections.' });
     }
-    const [currentUser, peer] = await Promise.all([
-      User.findById(req.user._id).select('+encryptionPublicKey +encryptionSigningPublicKey encryptionKeyVersion'),
-      User.findById(peerId).select('name headline profilePicture +encryptionPublicKey +encryptionSigningPublicKey encryptionKeyVersion')
-    ]);
+    const peer = await User.findById(peerId).select('name headline profilePicture +encryptionPublicKey +encryptionSigningPublicKey encryptionKeyVersion');
     if (!peer) return res.status(404).json({ success: false, message: 'Connected account not found.' });
-    if (!currentUser.encryptionPublicKey || !currentUser.encryptionSigningPublicKey || !peer.encryptionPublicKey || !peer.encryptionSigningPublicKey) {
-      return res.status(409).json({ success: false, encryptionSetupRequired: true, message: 'Both people need to set up an encryption key before messaging.' });
-    }
 
     const pairKey = [req.user._id.toString(), peer._id.toString()].sort().join(':');
     let conversation = await Conversation.findOne({ pairKey });
@@ -217,7 +212,21 @@ const sendMessage = async (req, res, next) => {
     const authorized = await getAuthorizedConversation(req.params.conversationId, req.user._id);
     if (!authorized) return res.status(404).json({ success: false, message: 'Conversation not found or no longer available.' });
 
-    const { ciphertext, iv, wrappedKeys, signature } = req.body;
+    const normalizedPayload = normalizeDirectMessagePayload(req.body);
+    if (normalizedPayload.error) return res.status(400).json({ success: false, message: normalizedPayload.error });
+    if (normalizedPayload.kind === 'text') {
+      const message = await DirectMessage.create({
+        conversation: authorized.conversation._id,
+        sender: req.user._id,
+        text: normalizedPayload.text,
+        readBy: [req.user._id]
+      });
+      authorized.conversation.lastMessageAt = message.createdAt;
+      await authorized.conversation.save();
+      res.set('Cache-Control', 'private, no-store');
+      return res.status(201).json({ success: true, message });
+    }
+
     const participantIds = authorized.conversation.participants.map((id) => id.toString()).sort();
     if (typeof ciphertext !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(ciphertext) || ciphertext.length > 180000 ||
         typeof iv !== 'string' || !/^[A-Za-z0-9+/]{16}={0,2}$/.test(iv) ||
