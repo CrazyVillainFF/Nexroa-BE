@@ -215,14 +215,21 @@ const sendMessage = async (req, res, next) => {
     const normalizedPayload = normalizeDirectMessagePayload(req.body);
     if (normalizedPayload.error) return res.status(400).json({ success: false, message: normalizedPayload.error });
     if (normalizedPayload.kind === 'text') {
-      const message = await DirectMessage.create({
-        conversation: authorized.conversation._id,
-        sender: req.user._id,
-        text: normalizedPayload.text,
-        readBy: [req.user._id]
-      });
-      authorized.conversation.lastMessageAt = message.createdAt;
-      await authorized.conversation.save();
+      const messageTimestamp = new Date();
+      const [message] = await Promise.all([
+        DirectMessage.create({
+          conversation: authorized.conversation._id,
+          sender: req.user._id,
+          text: normalizedPayload.text,
+          readBy: [req.user._id],
+          createdAt: messageTimestamp,
+          updatedAt: messageTimestamp
+        }),
+        Conversation.updateOne(
+          { _id: authorized.conversation._id },
+          { $max: { lastMessageAt: messageTimestamp } }
+        )
+      ]);
       res.set('Cache-Control', 'private, no-store');
       return res.status(201).json({ success: true, message });
     }
