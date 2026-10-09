@@ -14,15 +14,23 @@ const postRoutes = require('./routes/postRoutes');
 const commentRoutes = require('./routes/commentRoutes');
 const connectionRoutes = require('./routes/connectionRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const messageRoutes = require('./routes/messageRoutes');
 
 const app = express();
 
-// Initialize database and auto-seed if empty
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET must be configured with at least 32 characters in production.');
+  }
+}
+
+// Initialize database and seed demo data only outside production unless explicitly requested.
 const initApp = async () => {
   try {
     await connectDB();
     const count = await User.countDocuments();
-    if (count === 0) {
+    if (count === 0 && (process.env.NODE_ENV !== 'production' || process.env.SEED_DEMO_DATA === 'true')) {
       console.log('[Server] Database is empty. Running initial auto-seed for demo experience...');
       // Run seed without process.exit
       const seedUsers = [
@@ -207,6 +215,10 @@ app.options('*', cors());
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 // Static directory for uploaded assets
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -236,6 +248,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);

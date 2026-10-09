@@ -1,7 +1,9 @@
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { processUploadedFile } = require('../middleware/uploadMiddleware');
+const { canViewUserPosts, postVisibilityFilter, addPostVisibility } = require('../utils/postVisibility');
 
 // @desc    Create a new post
 // @route   POST /api/posts
@@ -66,10 +68,12 @@ const getFeed = async (req, res, next) => {
     const skip = (page - 1) * limit;
     const tag = req.query.tag;
 
-    const query = {};
+    let query = {};
     if (tag) {
       query.tags = tag.toLowerCase();
     }
+
+    query = addPostVisibility(query, await postVisibilityFilter(req.user?._id));
 
     const total = await Post.countDocuments(query);
     const posts = await Post.find(query)
@@ -117,6 +121,11 @@ const getUserPosts = async (req, res, next) => {
     const limit = parseInt(req.query.limit, 10) || 10;
     const skip = (page - 1) * limit;
 
+    const profileOwner = await User.findById(req.params.userId).select('privateAccount _id');
+    if (!profileOwner) return res.status(404).json({ success: false, message: 'Profile not found.' });
+    if (!(await canViewUserPosts(req.user?._id, profileOwner))) {
+      return res.status(403).json({ success: false, privateAccount: true, message: 'This account is private.' });
+    }
     const query = { author: req.params.userId };
     const total = await Post.countDocuments(query);
 
@@ -178,6 +187,11 @@ const getPostById = async (req, res, next) => {
       });
     }
 
+    const owner = await User.findById(post.author).select('privateAccount _id');
+    if (!(await canViewUserPosts(req.user?._id, owner))) {
+      return res.status(403).json({ success: false, privateAccount: true, message: 'This account is private.' });
+    }
+
     const pObj = post.toObject();
     pObj.likeCount = post.likes ? post.likes.length : 0;
     pObj.commentCount = post.comments ? post.comments.length : 0;
@@ -204,6 +218,11 @@ const updatePost = async (req, res, next) => {
         success: false,
         message: 'Post not found.'
       });
+    }
+
+    const owner = await User.findById(post.author).select('privateAccount _id');
+    if (!(await canViewUserPosts(req.user?._id, owner))) {
+      return res.status(403).json({ success: false, privateAccount: true, message: 'This account is private.' });
     }
 
     // Check authorization: only author can update
@@ -293,6 +312,11 @@ const toggleLikePost = async (req, res, next) => {
         success: false,
         message: 'Post not found.'
       });
+    }
+
+    const owner = await User.findById(post.author).select('privateAccount _id');
+    if (!(await canViewUserPosts(req.user._id, owner))) {
+      return res.status(403).json({ success: false, privateAccount: true, message: 'This account is private.' });
     }
 
     const userId = req.user._id;

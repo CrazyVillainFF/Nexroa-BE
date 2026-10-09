@@ -1,6 +1,7 @@
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
 const Notification = require('../models/Notification');
+const { canViewUserPosts } = require('../utils/postVisibility');
 
 // @desc    Add comment to a post
 // @route   POST /api/posts/:postId/comments
@@ -23,6 +24,10 @@ const addComment = async (req, res, next) => {
         success: false,
         message: 'Post not found.'
       });
+    }
+
+    if (!(await canViewUserPosts(req.user._id, await require('../models/User').findById(post.author).select('privateAccount _id')))) {
+      return res.status(403).json({ success: false, privateAccount: true, message: 'This account is private.' });
     }
 
     const comment = await Comment.create({
@@ -66,6 +71,13 @@ const addComment = async (req, res, next) => {
 const getPostComments = async (req, res, next) => {
   try {
     const { postId } = req.params;
+
+    const post = await Post.findById(postId).select('author');
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
+    const author = await require('../models/User').findById(post.author).select('privateAccount _id');
+    if (!(await canViewUserPosts(req.user?._id, author))) {
+      return res.status(403).json({ success: false, privateAccount: true, message: 'This account is private.' });
+    }
 
     const comments = await Comment.find({ post: postId })
       .populate('author', 'name headline profilePicture company jobTitle')

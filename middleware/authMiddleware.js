@@ -16,10 +16,11 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'nexora_super_secret_jwt_key_2026_premium_networking');
+    if (!process.env.JWT_SECRET) throw new Error('Authentication is not configured.');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password');
 
-    if (!user) {
+    if (!user || (decoded.tokenVersion ?? 0) !== (user.tokenVersion || 0)) {
       return res.status(401).json({
         success: false,
         message: 'The user belonging to this token no longer exists.'
@@ -54,9 +55,10 @@ const optionalAuth = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'nexora_super_secret_jwt_key_2026_premium_networking');
+    if (!process.env.JWT_SECRET) return next();
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password');
-    if (user) {
+    if (user && (decoded.tokenVersion ?? 0) === (user.tokenVersion || 0)) {
       req.user = user;
     }
   } catch (err) {

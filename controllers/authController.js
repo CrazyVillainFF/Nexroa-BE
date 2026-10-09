@@ -1,8 +1,9 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'nexora_super_secret_jwt_key_2026_premium_networking', {
+const generateToken = (user) => {
+  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET must be configured before issuing a session.');
+  return jwt.sign({ id: user._id, tokenVersion: user.tokenVersion || 0 }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '30d'
   });
 };
@@ -12,7 +13,7 @@ const generateToken = (id) => {
 // @access  Public
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, confirmPassword, headline, company, jobTitle, location } = req.body;
+    const { name, email, password, confirmPassword, company, jobTitle, location, accountType, schoolName, course, courseStartYear } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -21,10 +22,10 @@ const register = async (req, res, next) => {
       });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters long.'
+        message: 'Password must be at least 8 characters long.'
       });
     }
 
@@ -33,6 +34,23 @@ const register = async (req, res, next) => {
         success: false,
         message: 'Passwords do not match.'
       });
+    }
+
+    if (!['student', 'workplace'].includes(accountType)) {
+      return res.status(400).json({ success: false, message: 'Choose Student or Workplace to continue.' });
+    }
+
+    const currentYear = new Date().getFullYear();
+    if (accountType === 'student') {
+      const year = Number(courseStartYear);
+      if (typeof schoolName !== 'string' || !schoolName.trim() || schoolName.length > 120 ||
+          typeof course !== 'string' || !course.trim() || course.length > 120 ||
+          !Number.isInteger(year) || year < 1900 || year > currentYear + 10) {
+        return res.status(400).json({ success: false, message: 'Provide a school or college, course, and valid start year.' });
+      }
+    } else if (typeof jobTitle !== 'string' || !jobTitle.trim() || jobTitle.length > 120 ||
+        typeof company !== 'string' || !company.trim() || company.length > 120) {
+      return res.status(400).json({ success: false, message: 'Provide your work role and company or organization.' });
     }
 
     const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
@@ -50,14 +68,20 @@ const register = async (req, res, next) => {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password,
-      headline: headline || (jobTitle && company ? `${jobTitle} at ${company}` : 'Professional at NEXORA'),
-      company: company || '',
-      jobTitle: jobTitle || '',
+      headline: (accountType === 'student'
+        ? `Student at ${schoolName.trim()}`
+        : `${jobTitle.trim()} at ${company.trim()}`).slice(0, 140),
+      company: accountType === 'student' ? schoolName.trim() : company.trim(),
+      jobTitle: accountType === 'student' ? 'Student' : jobTitle.trim(),
+      accountType,
+      ...(accountType === 'student' && {
+        education: [{ school: schoolName.trim(), fieldOfStudy: course.trim(), startYear: String(courseStartYear) }]
+      }),
       location: location || 'San Francisco, CA',
       profilePicture: defaultAvatar
     });
 
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     // Return user without password
     const userObj = user.toObject();
@@ -106,7 +130,7 @@ const login = async (req, res, next) => {
       });
     }
 
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     const userObj = user.toObject();
     delete userObj.password;
@@ -162,10 +186,10 @@ const updatePassword = async (req, res, next) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8 || newPassword.length > 128) {
       return res.status(400).json({
         success: false,
-        message: 'New password must be at least 6 characters.'
+        message: 'New password must be between 8 and 128 characters.'
       });
     }
 
@@ -187,9 +211,10 @@ const updatePassword = async (req, res, next) => {
     }
 
     user.password = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     res.status(200).json({
       success: true,

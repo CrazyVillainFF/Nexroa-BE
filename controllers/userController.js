@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Connection = require('../models/Connection');
 const Post = require('../models/Post');
 const { processUploadedFile } = require('../middleware/uploadMiddleware');
+const { postVisibilityFilter, addPostVisibility } = require('../utils/postVisibility');
 
 // @desc    Get all users with filtering and pagination
 // @route   GET /api/users
@@ -345,9 +346,12 @@ const searchUsers = async (req, res, next) => {
       .select('name headline profilePicture company jobTitle location skills')
       .limit(10);
 
-    const posts = await Post.find({
+    let postQuery = {
       content: regex
-    })
+    };
+    postQuery = addPostVisibility(postQuery, await postVisibilityFilter(req.user?._id));
+
+    const posts = await Post.find(postQuery)
       .populate('author', 'name headline profilePicture')
       .sort({ createdAt: -1 })
       .limit(6);
@@ -367,7 +371,7 @@ const searchUsers = async (req, res, next) => {
 // @access  Private
 const updateSettings = async (req, res, next) => {
   try {
-    const { themePreference } = req.body;
+    const { themePreference, privateAccount } = req.body;
 
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -377,6 +381,12 @@ const updateSettings = async (req, res, next) => {
     if (themePreference) {
       user.themePreference = themePreference;
     }
+    if (privateAccount !== undefined) {
+      if (typeof privateAccount !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'Private Account must be enabled or disabled.' });
+      }
+      user.privateAccount = privateAccount;
+    }
 
     await user.save();
 
@@ -385,7 +395,8 @@ const updateSettings = async (req, res, next) => {
       message: 'Settings updated.',
       user: {
         _id: user._id,
-        themePreference: user.themePreference
+        themePreference: user.themePreference,
+        privateAccount: user.privateAccount
       }
     });
   } catch (error) {

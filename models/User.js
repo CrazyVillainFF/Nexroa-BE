@@ -69,6 +69,11 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  accountType: {
+    type: String,
+    enum: ['student', 'workplace'],
+    default: 'workplace'
+  },
   profilePicture: {
     type: String,
     default: ''
@@ -99,6 +104,32 @@ const UserSchema = new mongoose.Schema({
     type: String,
     enum: ['light', 'dark', 'system'],
     default: 'light'
+  },
+  privateAccount: {
+    type: Boolean,
+    default: false
+  },
+  encryptionPublicKey: {
+    type: String,
+    default: '',
+    select: false,
+    maxlength: 4096
+  },
+  encryptionSigningPublicKey: {
+    type: String,
+    default: '',
+    select: false,
+    maxlength: 4096
+  },
+  encryptionKeyVersion: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  tokenVersion: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 }, {
   timestamps: true,
