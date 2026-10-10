@@ -6,6 +6,7 @@ const { connectDB } = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const User = require('./models/User');
 const seedDatabase = require('./utils/seed');
+const { isAllowedOrigin } = require('./config/corsOrigin');
 
 // Route imports
 const authRoutes = require('./routes/authRoutes');
@@ -185,21 +186,9 @@ const initApp = async () => {
 initApp();
 
 // CORS Configuration
-const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.trim().replace(/\/$/, '') : null;
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:3000',
-  'https://nexora-lac-three.vercel.app',
-  clientUrl
-].filter(Boolean);
-
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    const normalizedOrigin = origin.trim().replace(/\/$/, '');
-    const isVercel = /\.vercel\.app$/.test(normalizedOrigin);
-    if (allowedOrigins.includes(normalizedOrigin) || isVercel || process.env.NODE_ENV === 'development') {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     console.warn(`[CORS Blocked] Origin: ${origin}`);
